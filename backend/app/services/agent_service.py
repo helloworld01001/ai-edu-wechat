@@ -37,7 +37,6 @@ def _request_completion(client, messages, stream=False):
             model=Settings.MODEL_NAME,
             messages=messages,
             stream=stream,
-            timeout=Settings.MODEL_TIMEOUT_SECONDS,
         )
     except APITimeoutError:
         raise AppError("MODEL_TIMEOUT", "模型响应超时，请稍后重试", 504)
