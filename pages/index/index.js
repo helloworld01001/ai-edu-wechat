@@ -115,7 +115,7 @@ Page({
       wx.request({
         url: requestUrl,
         method: "POST",
-        timeout: 30000,
+        timeout: 120000,
         header: {
           "Content-Type": "application/json"
         },
