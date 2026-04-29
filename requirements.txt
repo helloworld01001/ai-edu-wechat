@@ -1,1 +1,5 @@
--r backend/requirements.txt
+flask
+flask-cors
+openai
+psycopg2-binary
+gunicorn
