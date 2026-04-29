@@ -1,0 +1,11 @@
+[providers]
+python = "3.11"
+
+[phases.setup]
+nixPkgs = ["python311", "python311Packages.pip"]
+
+[phases.install]
+cmds = ["pip install -r requirements.txt"]
+
+[start]
+cmd = "gunicorn --chdir backend --bind 0.0.0.0:$PORT server:app"
