@@ -1,6 +1,7 @@
 import os
 import uuid
 from contextlib import closing
+from datetime import datetime, timezone
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 import psycopg2
@@ -51,6 +52,32 @@ def init_db():
                       CONSTRAINT fk_session
                         FOREIGN KEY(session_id)
                           REFERENCES chat_sessions(id)
+                          ON DELETE CASCADE
+                    );
+                    """
+                )
+                cur.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS users (
+                      id BIGSERIAL PRIMARY KEY,
+                      username TEXT NOT NULL UNIQUE,
+                      password_hash TEXT NOT NULL,
+                      password_salt TEXT NOT NULL,
+                      display_name TEXT NOT NULL,
+                      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                    );
+                    """
+                )
+                cur.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS user_sessions (
+                      token TEXT PRIMARY KEY,
+                      user_id BIGINT NOT NULL,
+                      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                      expires_at TIMESTAMPTZ NOT NULL,
+                      CONSTRAINT fk_user
+                        FOREIGN KEY(user_id)
+                          REFERENCES users(id)
                           ON DELETE CASCADE
                     );
                     """
@@ -183,3 +210,140 @@ def db_ready():
         return True, "ok"
     except Exception as e:
         return False, str(e)
+
+
+def get_user_by_username(username):
+    conn = get_db_connection()
+    if conn is None:
+        return None
+    with closing(conn):
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT id, username, password_hash, password_salt, display_name, created_at
+                    FROM users
+                    WHERE username = %s
+                    LIMIT 1;
+                    """,
+                    (username,),
+                )
+                row = cur.fetchone()
+    if not row:
+        return None
+    return {
+        "id": row[0],
+        "username": row[1],
+        "password_hash": row[2],
+        "password_salt": row[3],
+        "display_name": row[4],
+        "created_at": row[5].timestamp() if row[5] else None,
+    }
+
+
+def get_user_by_id(user_id):
+    conn = get_db_connection()
+    if conn is None:
+        return None
+    with closing(conn):
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT id, username, display_name, created_at
+                    FROM users
+                    WHERE id = %s
+                    LIMIT 1;
+                    """,
+                    (user_id,),
+                )
+                row = cur.fetchone()
+    if not row:
+        return None
+    return {
+        "id": row[0],
+        "username": row[1],
+        "display_name": row[2],
+        "created_at": row[3].timestamp() if row[3] else None,
+    }
+
+
+def create_user(username, password_hash, password_salt, display_name):
+    conn = get_db_connection()
+    if conn is None:
+        raise RuntimeError("DATABASE_URL 未配置")
+    with closing(conn):
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO users (username, password_hash, password_salt, display_name)
+                    VALUES (%s, %s, %s, %s)
+                    RETURNING id, username, display_name, created_at;
+                    """,
+                    (username, password_hash, password_salt, display_name),
+                )
+                row = cur.fetchone()
+    return {
+        "id": row[0],
+        "username": row[1],
+        "display_name": row[2],
+        "created_at": row[3].timestamp() if row[3] else None,
+    }
+
+
+def create_user_session(token, user_id, expires_at):
+    conn = get_db_connection()
+    if conn is None:
+        raise RuntimeError("DATABASE_URL 未配置")
+    with closing(conn):
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO user_sessions (token, user_id, expires_at)
+                    VALUES (%s, %s, %s);
+                    """,
+                    (token, user_id, expires_at),
+                )
+
+
+def get_user_by_token(token):
+    conn = get_db_connection()
+    if conn is None:
+        return None
+    with closing(conn):
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT u.id, u.username, u.display_name, u.created_at, s.expires_at
+                    FROM user_sessions s
+                    JOIN users u ON u.id = s.user_id
+                    WHERE s.token = %s
+                    LIMIT 1;
+                    """,
+                    (token,),
+                )
+                row = cur.fetchone()
+    if not row:
+        return None
+    if row[4] and row[4].replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
+        delete_user_session(token)
+        return None
+    return {
+        "id": row[0],
+        "username": row[1],
+        "display_name": row[2],
+        "created_at": row[3].timestamp() if row[3] else None,
+    }
+
+
+def delete_user_session(token):
+    conn = get_db_connection()
+    if conn is None:
+        return
+    with closing(conn):
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM user_sessions WHERE token = %s;", (token,))

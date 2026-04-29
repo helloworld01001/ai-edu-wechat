@@ -1,0 +1,32 @@
+page {
+  height: 100vh;
+  background: #ffffff;
+  color: #1f2937;
+}
+
+.page {
+  min-height: calc(100vh - 44px - env(safe-area-inset-top));
+  padding: 24rpx;
+  box-sizing: border-box;
+}
+
+.empty-card {
+  margin-top: 20rpx;
+  border: 1rpx solid #e5e7eb;
+  border-radius: 20rpx;
+  padding: 24rpx;
+  background: #ffffff;
+}
+
+.title {
+  font-size: 34rpx;
+  font-weight: 700;
+}
+
+.desc {
+  margin-top: 12rpx;
+  font-size: 28rpx;
+  color: #6b7280;
+  line-height: 1.6;
+}
+/* pages/create/index.wxss */

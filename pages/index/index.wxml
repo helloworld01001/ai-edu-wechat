@@ -54,20 +54,31 @@
   </scroll-view>
 
   <view class="input-area">
-    <textarea
-      class="input"
-      placeholder="您有什么想知道的，或输入 @ 选择技能来问我"
-      value="{{inputText}}"
-      maxlength="500"
-      auto-height
-      cursor-spacing="24"
-      bindinput="onInput"
-    />
-    <view class="input-footer">
-      <text class="counter">{{inputText.length}}/500</text>
-      <button class="send-btn" bindtap="sendMessage" loading="{{loading}}" disabled="{{loading || !canSend}}">
-        发送
-      </button>
+    <view class="input-tip">内容由 AI 大模型生成，仅供参考</view>
+    <view class="input-card">
+      <textarea
+        class="input"
+        placeholder="您有什么想知道的，或输入 @ 选择技能来问问我"
+        placeholder-style="color:#a8b1bd;font-size:29rpx;"
+        value="{{inputText}}"
+        maxlength="500"
+        auto-height
+        cursor-spacing="24"
+        bindinput="onInput"
+      />
+      <view class="input-footer">
+        <text class="counter">{{inputText.length}}/500</text>
+        <view class="input-actions">
+          <text class="plus-btn">＋</text>
+          <view class="action-divider"></view>
+          <view
+            class="send-icon {{loading || !canSend ? 'disabled' : 'active'}}"
+            bindtap="sendMessage"
+          >
+            <text class="send-icon-text">➤</text>
+          </view>
+        </view>
+      </view>
     </view>
   </view>
 </view>

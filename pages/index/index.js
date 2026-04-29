@@ -25,12 +25,28 @@ function escapeHtml(text) {
     .replace(/'/g, "&#39;")
 }
 
+function renderMathImage(latex, block = false) {
+  const expr = String(latex || "").trim()
+  if (!expr) return ""
+  const encoded = encodeURIComponent(`\\dpi{160} ${expr}`)
+  const src = `https://latex.codecogs.com/svg.image?${encoded}`
+  if (block) {
+    return `<img src="${src}" style="display:block;max-width:100%;margin:10px auto;" />`
+  }
+  return `<img src="${src}" style="display:inline-block;vertical-align:middle;max-height:1.6em;" />`
+}
+
 function renderInlineMarkdown(text) {
-  return text
-    .replace(/\$([^$\n]+)\$/g, "<span style=\"font-family:Times New Roman,serif;font-style:italic;background:#f8fafc;padding:0 4px;border-radius:4px;\">$1</span>")
+  return String(text || "")
+    .replace(/\\\((.+?)\\\)/g, (_, expr) => renderMathImage(expr, false))
+    .replace(/\$([^$\n]+)\$/g, (_, expr) => renderMathImage(expr, false))
     .replace(/`([^`]+)`/g, "<code style=\"background:#eef0f4;padding:2px 4px;border-radius:4px;font-family:monospace;\">$1</code>")
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
     .replace(/\*([^*]+)\*/g, "<em>$1</em>")
+}
+
+function renderBlockMath(content) {
+  return renderMathImage(content, true)
 }
 
 function parseTableRow(line) {
@@ -105,6 +121,34 @@ function markdownToRichText(markdown) {
       continue
     }
 
+    // 多行块公式：$$ ... $$（分隔符可独占多行）
+    if (line.trim() === "$$") {
+      closeLists()
+      let j = i + 1
+      const mathLines = []
+      while (j < blocks.length && blocks[j].trim() !== "$$") {
+        mathLines.push(blocks[j])
+        j += 1
+      }
+      html.push(renderBlockMath(mathLines.join("\n")))
+      i = j < blocks.length ? j + 1 : j
+      continue
+    }
+
+    // 多行块公式：\[ ... \]
+    if (line.trim() === "\\[") {
+      closeLists()
+      let j = i + 1
+      const mathLines = []
+      while (j < blocks.length && blocks[j].trim() !== "\\]") {
+        mathLines.push(blocks[j])
+        j += 1
+      }
+      html.push(renderBlockMath(mathLines.join("\n")))
+      i = j < blocks.length ? j + 1 : j
+      continue
+    }
+
     const tableHead = parseTableRow(line)
     const tableDivider = blocks[i + 1] ? isTableDividerRow(blocks[i + 1]) : false
     if (tableHead && tableDivider) {
@@ -133,9 +177,17 @@ function markdownToRichText(markdown) {
     if (h) {
       closeLists()
       const level = h[1].length
-      const fontSize = Math.max(36 - level * 4, 20)
+      const headingSizeMap = {
+        1: 20,
+        2: 18,
+        3: 17,
+        4: 16,
+        5: 15,
+        6: 14
+      }
+      const fontSize = headingSizeMap[level] || 14
       const marginBottom = level === 1 ? "16px" : "8px"
-      html.push(`<h${level} style="margin:14px 0 ${marginBottom};font-size:${fontSize}rpx;font-weight:700;line-height:1.35;">${renderInlineMarkdown(escapeHtml(h[2]))}</h${level}>`)
+      html.push(`<h${level} style="margin:14px 0 ${marginBottom};font-size:${fontSize}px;font-weight:700;line-height:1.35;">${renderInlineMarkdown(escapeHtml(h[2]))}</h${level}>`)
       i += 1
       continue
     }
@@ -143,7 +195,7 @@ function markdownToRichText(markdown) {
     const blockMath = line.match(/^\s*\$\$(.+)\$\$\s*$/)
     if (blockMath) {
       closeLists()
-      html.push(`<p style="margin:10px 0;padding:8px 10px;background:#f8fafc;border-radius:8px;font-family:Times New Roman,serif;font-style:italic;">${escapeHtml(blockMath[1])}</p>`)
+      html.push(renderBlockMath(blockMath[1]))
       i += 1
       continue
     }

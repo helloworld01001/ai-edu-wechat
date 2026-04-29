@@ -2,16 +2,20 @@ page {
   height: 100vh;
   background: #ffffff;
   color: #1f2937;
+  display: flex;
+  flex-direction: column;
 }
 
 .page {
-  height: calc(100vh - 44px - env(safe-area-inset-top));
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
 }
 
 .scrollarea {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
 }
@@ -180,48 +184,88 @@ page {
 
 .input-area {
   background: #ffffff;
-  border-top-left-radius: 24rpx;
-  border-top-right-radius: 24rpx;
-  padding: 16rpx 20rpx calc(18rpx + env(safe-area-inset-bottom));
-  box-shadow: 0 -8rpx 24rpx rgba(15, 23, 42, 0.06);
+  padding: 8rpx 12rpx 10rpx;
+}
+
+.input-card {
+  border: 2rpx solid #d9dde5;
+  border-radius: 38rpx;
+  background: #fff;
+  padding: 16rpx 18rpx 10rpx;
 }
 
 .input {
   width: 100%;
-  min-height: 116rpx;
-  max-height: 220rpx;
-  background: #f7f8fa;
-  border-radius: 18rpx;
-  padding: 18rpx;
+  min-height: 170rpx;
+  max-height: 300rpx;
+  background: transparent;
+  border-radius: 0;
+  padding: 6rpx 10rpx;
   box-sizing: border-box;
-  font-size: 28rpx;
-  line-height: 1.5;
+  font-size: 31rpx;
+  line-height: 1.4;
+  color: #2a3140;
 }
 
 .input-footer {
-  margin-top: 10rpx;
+  margin-top: 6rpx;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  padding: 0 8rpx 4rpx;
 }
 
 .counter {
-  color: #9ca3af;
-  font-size: 24rpx;
+  color: #9aa3af;
+  font-size: 29rpx;
 }
 
-.send-btn {
-  min-width: 132rpx;
-  height: 70rpx;
-  line-height: 70rpx;
-  border-radius: 35rpx;
-  background: #2563eb;
-  color: #ffffff;
+.input-actions {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.plus-btn {
+  font-size: 44rpx;
+  line-height: 1;
+  color: #727b8a;
+  padding: 0 4rpx;
+}
+
+.action-divider {
+  width: 2rpx;
+  height: 36rpx;
+  background: #d8dde6;
+}
+
+.send-icon {
+  width: 60rpx;
+  height: 60rpx;
+  border-radius: 30rpx;
+  background: #eceff4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.send-icon.disabled {
+  opacity: 1;
+}
+
+.send-icon-text {
   font-size: 28rpx;
-  padding: 0 24rpx;
+  color: #c4cbd6;
+  transform: translateX(2rpx);
 }
 
-.send-btn[disabled] {
-  background: #9bb8f0;
-  color: #ffffff;
+.send-icon.active .send-icon-text {
+  color: #7f8897;
+}
+
+.input-tip {
+  text-align: center;
+  color: #98a1af;
+  font-size: 22rpx;
+  margin-bottom: 4rpx;
 }

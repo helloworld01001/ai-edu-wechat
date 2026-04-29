@@ -1,0 +1,31 @@
+<navigation-bar title="我的" back="{{false}}" color="#1f2937" background="#ffffff"></navigation-bar>
+
+<view class="page">
+  <view class="profile-main">
+    <view class="login-card" bindtap="onLoginTap">
+      <view class="login-left">
+        <view class="avatar">👤</view>
+        <text class="login-text">{{isLoggedIn ? user.display_name : "点击登录"}}</text>
+      </view>
+      <text class="settings-icon" catchtap="onSettingsTap">⚙</text>
+    </view>
+
+    <view class="feature-card">
+      <view class="feature-title">更多功能</view>
+      <view class="feature-list">
+        <view class="feature-item" bindtap="onFeedbackTap">
+          <text class="feature-icon">💬</text>
+          <text class="feature-text">投诉与建议</text>
+        </view>
+        <view class="feature-item" bindtap="onSupportTap">
+          <text class="feature-icon">🎧</text>
+          <text class="feature-text">联系客服</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <view class="profile-footer">
+    <button class="logout-btn" bindtap="onLogoutTap">退出登录</button>
+  </view>
+</view>

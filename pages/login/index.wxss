@@ -1,0 +1,50 @@
+page {
+  height: 100vh;
+  background: #f5f6f8;
+}
+
+.page {
+  min-height: calc(100vh - 44px - env(safe-area-inset-top));
+  padding: 24rpx;
+  box-sizing: border-box;
+}
+
+.card {
+  background: #ffffff;
+  border-radius: 20rpx;
+  padding: 24rpx;
+}
+
+.input {
+  height: 84rpx;
+  border: 1rpx solid #e5e7eb;
+  border-radius: 14rpx;
+  padding: 0 20rpx;
+  margin-bottom: 16rpx;
+  font-size: 28rpx;
+  box-sizing: border-box;
+}
+
+.btn-row {
+  display: flex;
+  gap: 16rpx;
+}
+
+.btn {
+  flex: 1;
+  height: 84rpx;
+  line-height: 84rpx;
+  border-radius: 14rpx;
+  font-size: 30rpx;
+}
+
+.secondary {
+  background: #eef2f7;
+  color: #334155;
+}
+
+.primary {
+  background: #2563eb;
+  color: #ffffff;
+}
+/* pages/login/index.wxss */

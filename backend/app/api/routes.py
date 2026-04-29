@@ -11,6 +11,7 @@ from ..services.agent_service import (
     session_detail,
     session_list,
 )
+from ..services.auth_service import login, logout, me, register
 
 
 def ok(data, status=200):
@@ -22,6 +23,12 @@ def fail(code, message, status=400):
 
 
 def register_routes(app):
+    def _read_bearer_token():
+        auth = (request.headers.get("Authorization") or "").strip()
+        if auth.lower().startswith("bearer "):
+            return auth[7:].strip()
+        return ""
+
     @app.get("/api/health")
     def health():
         db_ok, message = db_ready()
@@ -102,3 +109,39 @@ def register_routes(app):
     def agent_session_detail_api(session_id):
         include_system = request.args.get("include_system", "").strip().lower() in {"1", "true", "yes"}
         return jsonify(session_detail(session_id=session_id, include_system=include_system))
+
+    @app.post("/api/auth/register")
+    def auth_register_api():
+        payload = request.get_json(silent=True) or {}
+        try:
+            return jsonify(
+                register(
+                    username=payload.get("username"),
+                    password=payload.get("password"),
+                    display_name=payload.get("display_name"),
+                )
+            )
+        except AppError as e:
+            return fail(e.code, e.message, e.status_code)
+
+    @app.post("/api/auth/login")
+    def auth_login_api():
+        payload = request.get_json(silent=True) or {}
+        try:
+            return jsonify(login(username=payload.get("username"), password=payload.get("password")))
+        except AppError as e:
+            return fail(e.code, e.message, e.status_code)
+
+    @app.get("/api/auth/me")
+    def auth_me_api():
+        try:
+            return jsonify(me(token=_read_bearer_token()))
+        except AppError as e:
+            return fail(e.code, e.message, e.status_code)
+
+    @app.post("/api/auth/logout")
+    def auth_logout_api():
+        try:
+            return jsonify(logout(token=_read_bearer_token()))
+        except AppError as e:
+            return fail(e.code, e.message, e.status_code)

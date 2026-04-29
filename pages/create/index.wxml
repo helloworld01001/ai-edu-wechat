@@ -1,0 +1,10 @@
+<navigation-bar title="AI创作" back="{{false}}" color="#1f2937" background="#ffffff"></navigation-bar>
+
+<view class="page">
+  <view class="empty-card">
+    <view class="title">AI创作</view>
+    <view class="desc">该页面暂未开放，后续将在这里提供 AI 创作能力。</view>
+  </view>
+</view>
+<!--pages/create/index.wxml-->
+<text>pages/create/index.wxml</text>
