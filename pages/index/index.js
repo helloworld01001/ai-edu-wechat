@@ -7,6 +7,15 @@ function getGreeting() {
   return "晚上好"
 }
 
+function safeStringify(data) {
+  if (typeof data === "string") return data
+  try {
+    return JSON.stringify(data)
+  } catch (e) {
+    return String(data || "")
+  }
+}
+
 Page({
   data: {
     userName: "112",
@@ -38,6 +47,13 @@ Page({
         emoji: "✨"
       }
     ]
+  },
+
+  onLoad() {
+    const sessionId = wx.getStorageSync("chat_session_id") || ""
+    if (sessionId) {
+      this.sessionId = sessionId
+    }
   },
 
   onInput(e) {
@@ -73,7 +89,7 @@ Page({
     })
 
     try {
-      const reply = await this.requestModel(updatedMessages)
+      const reply = await this.requestModel(prompt)
       this.setData({
         messages: [...updatedMessages, { role: "assistant", content: reply }]
       })
@@ -92,28 +108,47 @@ Page({
     }
   },
 
-  requestModel(historyMessages) {
+  requestModel(message) {
     const { backendBaseUrl, chatEndpoint } = MODEL_API_CONFIG
+    const requestUrl = `${backendBaseUrl}${chatEndpoint}`
     return new Promise((resolve, reject) => {
       wx.request({
-        url: `${backendBaseUrl}${chatEndpoint}`,
+        url: requestUrl,
         method: "POST",
         timeout: 30000,
         header: {
           "Content-Type": "application/json"
         },
         data: {
-          messages: historyMessages
+          message,
+          session_id: this.sessionId || undefined
         },
         success: (res) => {
           const result = res.data || {}
-          if (res.statusCode >= 200 && res.statusCode < 300 && result.ok && result.content) {
-            resolve(result.content)
+          if (res.statusCode >= 200 && res.statusCode < 300 && result.ok) {
+            if (result.session_id) {
+              this.sessionId = result.session_id
+              wx.setStorageSync("chat_session_id", result.session_id)
+            }
+            resolve(result.reply || result.content || "")
             return
           }
-          reject(new Error(result.error || "模型返回异常"))
+          const errorCode = result?.error?.code ? `[${result.error.code}] ` : ""
+          const errorMessage = result?.error?.message || result?.error || "模型返回异常"
+          const responsePreview = safeStringify(res.data).slice(0, 240)
+          reject(
+            new Error(
+              `${errorCode}${errorMessage}\nHTTP: ${res.statusCode}\nURL: ${requestUrl}\n响应: ${responsePreview}`
+            )
+          )
         },
-        fail: (err) => reject(new Error(err.errMsg || "后端接口调用失败"))
+        fail: (err) => {
+          reject(
+            new Error(
+              `${err.errMsg || "后端接口调用失败"}\nURL: ${requestUrl}\n请检查：1) 合法域名 2) HTTPS 3) 后端在线`
+            )
+          )
+        }
       })
     })
   }
