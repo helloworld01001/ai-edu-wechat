@@ -42,7 +42,8 @@
       <block wx:else>
         <view class="chat-list">
           <view class="msg {{item.role === 'user' ? 'user' : 'assistant'}}" wx:for="{{messages}}" wx:key="index">
-            <text class="msg-text">{{item.content}}</text>
+            <text wx:if="{{item.role === 'user'}}" class="msg-text">{{item.content}}</text>
+            <rich-text wx:else class="msg-text" nodes="{{item.richText || item.content}}"></rich-text>
           </view>
           <view class="loading" wx:if="{{loading}}">正在思考中...</view>
         </view>

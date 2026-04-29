@@ -13,6 +13,5 @@ def build_client():
     return OpenAI(
         api_key=api_key,
         base_url=base_url,
-        timeout=Settings.MODEL_TIMEOUT_SECONDS,
         max_retries=Settings.MODEL_MAX_RETRIES,
     )

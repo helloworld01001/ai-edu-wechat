@@ -16,6 +16,121 @@ function safeStringify(data) {
   }
 }
 
+function escapeHtml(text) {
+  return String(text || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+}
+
+function renderInlineMarkdown(text) {
+  return text
+    .replace(/`([^`]+)`/g, "<code style=\"background:#eef0f4;padding:2px 4px;border-radius:4px;font-family:monospace;\">$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*([^*]+)\*/g, "<em>$1</em>")
+}
+
+function markdownToRichText(markdown) {
+  const source = String(markdown || "").replace(/\r\n/g, "\n")
+  const blocks = source.split("\n")
+  const html = []
+  let inCode = false
+  let inUl = false
+  let inOl = false
+
+  const closeLists = () => {
+    if (inUl) {
+      html.push("</ul>")
+      inUl = false
+    }
+    if (inOl) {
+      html.push("</ol>")
+      inOl = false
+    }
+  }
+
+  blocks.forEach((line) => {
+    if (line.trim().startsWith("```")) {
+      closeLists()
+      if (!inCode) {
+        inCode = true
+        html.push("<pre style=\"background:#f6f7f9;padding:10px 12px;border-radius:8px;overflow:auto;\"><code>")
+      } else {
+        inCode = false
+        html.push("</code></pre>")
+      }
+      return
+    }
+
+    if (inCode) {
+      html.push(`${escapeHtml(line)}\n`)
+      return
+    }
+
+    if (!line.trim()) {
+      closeLists()
+      html.push("<p style=\"margin:6px 0;\"></p>")
+      return
+    }
+
+    const h = line.match(/^(#{1,6})\s+(.*)$/)
+    if (h) {
+      closeLists()
+      const level = h[1].length
+      const fontSize = Math.max(20 - level * 2, 13)
+      html.push(`<h${level} style="margin:10px 0 6px;font-size:${fontSize}px;font-weight:600;">${renderInlineMarkdown(escapeHtml(h[2]))}</h${level}>`)
+      return
+    }
+
+    const ul = line.match(/^\s*[-*]\s+(.*)$/)
+    if (ul) {
+      if (inOl) {
+        html.push("</ol>")
+        inOl = false
+      }
+      if (!inUl) {
+        inUl = true
+        html.push("<ul style=\"padding-left:18px;margin:6px 0;\">")
+      }
+      html.push(`<li style="margin:2px 0;">${renderInlineMarkdown(escapeHtml(ul[1]))}</li>`)
+      return
+    }
+
+    const ol = line.match(/^\s*\d+\.\s+(.*)$/)
+    if (ol) {
+      if (inUl) {
+        html.push("</ul>")
+        inUl = false
+      }
+      if (!inOl) {
+        inOl = true
+        html.push("<ol style=\"padding-left:20px;margin:6px 0;\">")
+      }
+      html.push(`<li style="margin:2px 0;">${renderInlineMarkdown(escapeHtml(ol[1]))}</li>`)
+      return
+    }
+
+    closeLists()
+    html.push(`<p style="margin:6px 0;line-height:1.7;">${renderInlineMarkdown(escapeHtml(line))}</p>`)
+  })
+
+  closeLists()
+  if (inCode) {
+    html.push("</code></pre>")
+  }
+  return html.join("")
+}
+
+function buildAssistantMessage(content) {
+  return {
+    role: "assistant",
+    content,
+    richText: markdownToRichText(content)
+  }
+}
+
 Page({
   data: {
     userName: "112",
@@ -91,16 +206,13 @@ Page({
     try {
       const reply = await this.requestModel(prompt)
       this.setData({
-        messages: [...updatedMessages, { role: "assistant", content: reply }]
+        messages: [...updatedMessages, buildAssistantMessage(reply)]
       })
     } catch (error) {
       this.setData({
         messages: [
           ...updatedMessages,
-          {
-            role: "assistant",
-            content: `请求失败：${error.message || "请检查接口配置"}`
-          }
+          buildAssistantMessage(`请求失败：${error.message || "请检查接口配置"}`)
         ]
       })
     } finally {
