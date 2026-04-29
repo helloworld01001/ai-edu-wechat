@@ -7,3 +7,5 @@ class Settings:
         "你是启小智，一个面向中学生的 AI 学习助手。回答简洁、准确、结构化。",
     )
     MODEL_NAME = os.getenv("MODEL_NAME", "glm-5")
+    MODEL_TIMEOUT_SECONDS = float(os.getenv("MODEL_TIMEOUT_SECONDS", "45"))
+    MODEL_MAX_RETRIES = int(os.getenv("MODEL_MAX_RETRIES", "1"))
