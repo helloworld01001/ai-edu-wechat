@@ -1,1 +1,1 @@
-web: gunicorn --chdir backend --bind 0.0.0.0:$PORT --workers 2 --threads 4 --worker-class gthread --timeout 120 --graceful-timeout 30 --keep-alive 15 server:app
+web: gunicorn --chdir backend --bind 0.0.0.0:${PORT:-8080} --workers 2 --threads 4 --worker-class gthread --timeout 120 --graceful-timeout 30 --keep-alive 15 server:app

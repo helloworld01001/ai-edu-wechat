@@ -27,9 +27,41 @@ function escapeHtml(text) {
 
 function renderInlineMarkdown(text) {
   return text
+    .replace(/\$([^$\n]+)\$/g, "<span style=\"font-family:Times New Roman,serif;font-style:italic;background:#f8fafc;padding:0 4px;border-radius:4px;\">$1</span>")
     .replace(/`([^`]+)`/g, "<code style=\"background:#eef0f4;padding:2px 4px;border-radius:4px;font-family:monospace;\">$1</code>")
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
     .replace(/\*([^*]+)\*/g, "<em>$1</em>")
+}
+
+function parseTableRow(line) {
+  const raw = String(line || "").trim()
+  if (!raw.includes("|")) return null
+  const noEdge = raw.replace(/^\|/, "").replace(/\|$/, "")
+  return noEdge.split("|").map((cell) => renderInlineMarkdown(escapeHtml(cell.trim())))
+}
+
+function isTableDividerRow(line) {
+  const cells = parseTableRow(line)
+  if (!cells || !cells.length) return false
+  return cells.every((cell) => /^:?-{3,}:?$/.test(cell.replace(/&amp;/g, "&")))
+}
+
+function renderTable(lines) {
+  const header = parseTableRow(lines[0]) || []
+  const bodyRows = lines.slice(2).map((line) => parseTableRow(line)).filter(Boolean)
+  const headHtml = header
+    .map((cell) => `<th style="border:1px solid #d1d5db;padding:8px 10px;background:#f3f4f6;font-weight:700;text-align:left;">${cell}</th>`)
+    .join("")
+  const bodyHtml = bodyRows
+    .map((row, idx) => {
+      const rowBg = idx % 2 === 1 ? "background:#f9fafb;" : ""
+      const tds = row
+        .map((cell) => `<td style="border:1px solid #d1d5db;padding:8px 10px;vertical-align:top;">${cell}</td>`)
+        .join("")
+      return `<tr style="${rowBg}">${tds}</tr>`
+    })
+    .join("")
+  return `<table style="width:100%;border-collapse:collapse;margin:10px 0;font-size:15px;line-height:1.6;"><thead><tr>${headHtml}</tr></thead><tbody>${bodyHtml}</tbody></table>`
 }
 
 function markdownToRichText(markdown) {
@@ -39,6 +71,7 @@ function markdownToRichText(markdown) {
   let inCode = false
   let inUl = false
   let inOl = false
+  let i = 0
 
   const closeLists = () => {
     if (inUl) {
@@ -51,37 +84,75 @@ function markdownToRichText(markdown) {
     }
   }
 
-  blocks.forEach((line) => {
+  while (i < blocks.length) {
+    const line = blocks[i]
     if (line.trim().startsWith("```")) {
       closeLists()
       if (!inCode) {
         inCode = true
-        html.push("<pre style=\"background:#f6f7f9;padding:10px 12px;border-radius:8px;overflow:auto;\"><code>")
+        html.push("<pre style=\"background:#f6f7f9;padding:12px 14px;border-radius:10px;overflow:auto;margin:10px 0;\"><code>")
       } else {
         inCode = false
         html.push("</code></pre>")
       }
-      return
+      i += 1
+      continue
     }
 
     if (inCode) {
       html.push(`${escapeHtml(line)}\n`)
-      return
+      i += 1
+      continue
+    }
+
+    const tableHead = parseTableRow(line)
+    const tableDivider = blocks[i + 1] ? isTableDividerRow(blocks[i + 1]) : false
+    if (tableHead && tableDivider) {
+      closeLists()
+      const tableLines = [line, blocks[i + 1]]
+      let j = i + 2
+      while (j < blocks.length) {
+        const row = parseTableRow(blocks[j])
+        if (!row) break
+        tableLines.push(blocks[j])
+        j += 1
+      }
+      html.push(renderTable(tableLines))
+      i = j
+      continue
     }
 
     if (!line.trim()) {
       closeLists()
-      html.push("<p style=\"margin:6px 0;\"></p>")
-      return
+      html.push("<p style=\"margin:8px 0;\"></p>")
+      i += 1
+      continue
     }
 
     const h = line.match(/^(#{1,6})\s+(.*)$/)
     if (h) {
       closeLists()
       const level = h[1].length
-      const fontSize = Math.max(20 - level * 2, 13)
-      html.push(`<h${level} style="margin:10px 0 6px;font-size:${fontSize}px;font-weight:600;">${renderInlineMarkdown(escapeHtml(h[2]))}</h${level}>`)
-      return
+      const fontSize = Math.max(36 - level * 4, 20)
+      const marginBottom = level === 1 ? "16px" : "8px"
+      html.push(`<h${level} style="margin:14px 0 ${marginBottom};font-size:${fontSize}rpx;font-weight:700;line-height:1.35;">${renderInlineMarkdown(escapeHtml(h[2]))}</h${level}>`)
+      i += 1
+      continue
+    }
+
+    const blockMath = line.match(/^\s*\$\$(.+)\$\$\s*$/)
+    if (blockMath) {
+      closeLists()
+      html.push(`<p style="margin:10px 0;padding:8px 10px;background:#f8fafc;border-radius:8px;font-family:Times New Roman,serif;font-style:italic;">${escapeHtml(blockMath[1])}</p>`)
+      i += 1
+      continue
+    }
+
+    if (/^---+$/.test(line.trim())) {
+      closeLists()
+      html.push("<hr style=\"border:none;border-top:1px solid #d1d5db;margin:12px 0;\"/>")
+      i += 1
+      continue
     }
 
     const ul = line.match(/^\s*[-*]\s+(.*)$/)
@@ -92,10 +163,11 @@ function markdownToRichText(markdown) {
       }
       if (!inUl) {
         inUl = true
-        html.push("<ul style=\"padding-left:18px;margin:6px 0;\">")
+        html.push("<ul style=\"padding-left:22px;margin:8px 0;line-height:1.8;\">")
       }
-      html.push(`<li style="margin:2px 0;">${renderInlineMarkdown(escapeHtml(ul[1]))}</li>`)
-      return
+      html.push(`<li style="margin:3px 0;">${renderInlineMarkdown(escapeHtml(ul[1]))}</li>`)
+      i += 1
+      continue
     }
 
     const ol = line.match(/^\s*\d+\.\s+(.*)$/)
@@ -106,15 +178,17 @@ function markdownToRichText(markdown) {
       }
       if (!inOl) {
         inOl = true
-        html.push("<ol style=\"padding-left:20px;margin:6px 0;\">")
+        html.push("<ol style=\"padding-left:24px;margin:8px 0;line-height:1.8;\">")
       }
-      html.push(`<li style="margin:2px 0;">${renderInlineMarkdown(escapeHtml(ol[1]))}</li>`)
-      return
+      html.push(`<li style="margin:3px 0;">${renderInlineMarkdown(escapeHtml(ol[1]))}</li>`)
+      i += 1
+      continue
     }
 
     closeLists()
-    html.push(`<p style="margin:6px 0;line-height:1.7;">${renderInlineMarkdown(escapeHtml(line))}</p>`)
-  })
+    html.push(`<p style="margin:8px 0;line-height:1.8;font-size:31rpx;">${renderInlineMarkdown(escapeHtml(line))}</p>`)
+    i += 1
+  }
 
   closeLists()
   if (inCode) {
@@ -123,11 +197,21 @@ function markdownToRichText(markdown) {
   return html.join("")
 }
 
+function stripThinkContent(text) {
+  const source = String(text || "")
+  return source
+    .replace(/<think>[\s\S]*?<\/think>/gi, "")
+    .replace(/<think>[\s\S]*$/gi, "")
+    .replace(/<\/think>/gi, "")
+    .trim()
+}
+
 function buildAssistantMessage(content) {
+  const safeContent = stripThinkContent(content)
   return {
     role: "assistant",
-    content,
-    richText: markdownToRichText(content)
+    content: safeContent,
+    richText: markdownToRichText(safeContent)
   }
 }
 

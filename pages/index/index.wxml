@@ -2,7 +2,7 @@
 
 <view class="page">
   <scroll-view class="scrollarea" scroll-y type="list">
-    <view class="container">
+    <view class="page-container">
       <block wx:if="{{messages.length === 0}}">
         <view class="hero-card">
           <view class="hero-top">
@@ -12,7 +12,9 @@
                 我是你的 AI 学习助手「{{assistantName}}」。可以为你推荐 AI 课程、检索学习资料、解答 AI 概念，也能基于当前课程出题练习。
               </view>
             </view>
-            <view class="bot-avatar">🤖</view>
+            <view class="bot-avatar">
+              <image class="bot-avatar-img" src="/assets/images/agent.jpg" mode="aspectFill" />
+            </view>
           </view>
 
           <view class="hint-row">

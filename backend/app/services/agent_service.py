@@ -1,3 +1,4 @@
+import re
 from typing import Dict, Iterator, List
 
 from openai import APIConnectionError, APIError, APITimeoutError, RateLimitError
@@ -18,6 +19,19 @@ class AppError(Exception):
         self.code = code
         self.message = message
         self.status_code = status_code
+
+
+_THINK_BLOCK_RE = re.compile(r"<think>.*?</think>", flags=re.IGNORECASE | re.DOTALL)
+_THINK_OPEN_TO_END_RE = re.compile(r"<think>.*$", flags=re.IGNORECASE | re.DOTALL)
+_THINK_CLOSE_TAG_RE = re.compile(r"</think>", flags=re.IGNORECASE)
+
+
+def _strip_think_content(text: str) -> str:
+    # 过滤模型推理标签，避免把思维链展示给用户。
+    out = _THINK_BLOCK_RE.sub("", text or "")
+    out = _THINK_OPEN_TO_END_RE.sub("", out)
+    out = _THINK_CLOSE_TAG_RE.sub("", out)
+    return out.strip()
 
 
 def _build_llm_messages(session_id: str, message: str) -> List[Dict[str, str]]:
@@ -52,7 +66,7 @@ def chat_with_messages(messages, session_id=None):
     sid = ensure_session(session_id or "default")
     client = build_client()
     response = _request_completion(client, messages=messages)
-    content = response.choices[0].message.content or ""
+    content = _strip_think_content(response.choices[0].message.content or "")
     if not content:
         raise AppError("MODEL_EMPTY_RESPONSE", "模型返回为空", 502)
     user_content = messages[-1].get("content") if isinstance(messages[-1], dict) else ""
@@ -69,7 +83,7 @@ def agent_chat(message, session_id=None):
     llm_messages = _build_llm_messages(sid, message)
     client = build_client()
     response = _request_completion(client, messages=llm_messages)
-    reply = response.choices[0].message.content or ""
+    reply = _strip_think_content(response.choices[0].message.content or "")
     if not reply:
         raise AppError("MODEL_EMPTY_RESPONSE", "模型返回为空", 502)
     save_message(sid, "user", message, touch_title=True)
@@ -100,15 +114,20 @@ def agent_chat_stream(message, session_id=None) -> Iterator[dict]:
     stream = _request_completion(client, messages=llm_messages, stream=True)
 
     collected: List[str] = []
+    visible_so_far = ""
     yield {"type": "meta", "session_id": sid}
     for chunk in stream:
         delta = chunk.choices[0].delta.content if chunk.choices else None
         if not delta:
             continue
         collected.append(delta)
-        yield {"type": "delta", "content": delta}
+        current_visible = _strip_think_content("".join(collected))
+        newly_visible = current_visible[len(visible_so_far) :]
+        if newly_visible:
+            visible_so_far = current_visible
+            yield {"type": "delta", "content": newly_visible}
 
-    reply = "".join(collected).strip()
+    reply = _strip_think_content("".join(collected))
     if not reply:
         raise AppError("MODEL_EMPTY_RESPONSE", "模型返回为空", 502)
 
