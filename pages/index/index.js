@@ -1,4 +1,5 @@
 const { MODEL_API_CONFIG } = require("../../utils/model-api")
+const { suggestionPool } = require("../../utils/suggestion-pool")
 
 function getGreeting() {
   const hour = new Date().getHours()
@@ -267,43 +268,57 @@ function buildAssistantMessage(content) {
   }
 }
 
+function normalizeSuggestionGroup(group) {
+  return (group || []).map((item) => ({
+    title: item.tag || "",
+    desc: item.text || "",
+    emoji: item.icon || "✨"
+  }))
+}
+
+function pickRandomSuggestions(pool, count = 4) {
+  const all = (pool || []).reduce((acc, group) => acc.concat(normalizeSuggestionGroup(group)), [])
+  if (!all.length) return []
+  const copied = [...all]
+  for (let i = copied.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1))
+    const temp = copied[i]
+    copied[i] = copied[j]
+    copied[j] = temp
+  }
+  return copied.slice(0, Math.min(count, copied.length))
+}
+
 Page({
   data: {
-    userName: "112",
+    userName: "同学",
     assistantName: "启小智",
     greeting: getGreeting(),
     inputText: "",
     canSend: false,
+    showQuickActions: false,
     loading: false,
     messages: [],
-    suggestions: [
-      {
-        title: "概念判断题",
-        desc: "给我 5 道人工智能概念判断题，难度初中到高中。",
-        emoji: "✅"
-      },
-      {
-        title: "学习规划",
-        desc: "帮我做一份适合初中生的暑假 AI 启蒙学习计划。",
-        emoji: "🗺️"
-      },
-      {
-        title: "深度学习题",
-        desc: "出 2 道关于 CNN 和 Transformer 的理解题。",
-        emoji: "🧩"
-      },
-      {
-        title: "AI 应用",
-        desc: "人工智能现在在哪些地方已经帮到我们了？",
-        emoji: "✨"
-      }
-    ]
+    suggestions: pickRandomSuggestions(suggestionPool, 4)
   },
 
   onLoad() {
     const sessionId = wx.getStorageSync("chat_session_id") || ""
     if (sessionId) {
       this.sessionId = sessionId
+    }
+    this.syncUserName()
+  },
+
+  onShow() {
+    this.syncUserName()
+  },
+
+  syncUserName() {
+    const user = wx.getStorageSync("auth_user") || {}
+    const userName = (user.display_name || user.username || "").trim() || "同学"
+    if (userName !== this.data.userName) {
+      this.setData({ userName })
     }
   },
 
@@ -315,52 +330,132 @@ Page({
     })
   },
 
-  useSuggestion(e) {
-    const text = e.currentTarget.dataset.text || ""
+  noop() {},
+
+  closeQuickActions() {
+    if (this.data.showQuickActions) {
+      this.setData({ showQuickActions: false })
+    }
+  },
+
+  toggleQuickActions() {
+    this.setData({ showQuickActions: !this.data.showQuickActions })
+  },
+
+  onQuickActionTap(e) {
+    const t = e.currentTarget.dataset.type
+    const prompts = {
+      qa: "请帮我解答这道题，并一步步讲清楚思路：",
+      code: "请帮我完成这段编程任务，并解释关键代码：",
+      research: "请围绕这个主题做深入研究，并给出结构化分析："
+    }
+    const text = prompts[t] || ""
     this.setData({
       inputText: text,
-      canSend: !!text.trim()
+      canSend: !!text.trim(),
+      showQuickActions: false
+    })
+  },
+
+  useSuggestion(e) {
+    const text = e.currentTarget.dataset.text || ""
+    this.closeQuickActions()
+    this.sendPrompt(text)
+  },
+
+  switchSuggestions() {
+    const nextSuggestions = pickRandomSuggestions(suggestionPool, 4)
+    if (!nextSuggestions.length) return
+    this.setData({
+      suggestions: nextSuggestions
     })
   },
 
   async sendMessage() {
     const prompt = this.data.inputText.trim()
+    await this.sendPrompt(prompt, true)
+  },
+
+  async handleSendButton() {
+    if (this.data.loading) {
+      this.stopGenerating()
+      return
+    }
+    this.sendMessage()
+  },
+
+  stopGenerating() {
+    this._stoppedByUser = true
+    const generationId = this.currentGenerationId
+    if (this.currentRequestTask && this.currentRequestTask.abort) {
+      try {
+        this.currentRequestTask.abort()
+      } catch (_) {}
+    }
+    if (generationId) {
+      const { backendBaseUrl, chatStopEndpoint } = MODEL_API_CONFIG
+      wx.request({
+        url: `${backendBaseUrl}${chatStopEndpoint}`,
+        method: "POST",
+        header: { "Content-Type": "application/json" },
+        data: { generation_id: generationId },
+        fail: () => {}
+      })
+    }
+  },
+
+  async sendPrompt(prompt, clearInput = false) {
+    prompt = (prompt || "").trim()
     if (!prompt || this.data.loading) {
       return
     }
 
+    const generationId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    this.currentGenerationId = generationId
+    this._stoppedByUser = false
     const userMsg = { role: "user", content: prompt }
     const updatedMessages = [...this.data.messages, userMsg]
 
     this.setData({
       loading: true,
-      inputText: "",
-      canSend: false,
+      inputText: clearInput ? "" : this.data.inputText,
+      canSend: clearInput ? false : this.data.canSend,
       messages: updatedMessages
     })
 
     try {
-      const reply = await this.requestModel(prompt)
-      this.setData({
-        messages: [...updatedMessages, buildAssistantMessage(reply)]
-      })
+      const result = await this.requestModel(prompt, generationId)
+      if (result && result.stopped) {
+        this.setData({ messages: updatedMessages })
+      } else {
+        const reply = result.reply || result.content || ""
+        this.setData({
+          messages: [...updatedMessages, buildAssistantMessage(reply)]
+        })
+      }
     } catch (error) {
-      this.setData({
-        messages: [
-          ...updatedMessages,
-          buildAssistantMessage(`请求失败：${error.message || "请检查接口配置"}`)
-        ]
-      })
+      if (error && error.message === "__ABORTED__") {
+        this.setData({ messages: updatedMessages })
+      } else {
+        this.setData({
+          messages: [
+            ...updatedMessages,
+            buildAssistantMessage(`请求失败：${error.message || "请检查接口配置"}`)
+          ]
+        })
+      }
     } finally {
       this.setData({ loading: false })
+      this.currentRequestTask = null
+      this.currentGenerationId = ""
     }
   },
 
-  requestModel(message) {
+  requestModel(message, generationId) {
     const { backendBaseUrl, chatEndpoint } = MODEL_API_CONFIG
     const requestUrl = `${backendBaseUrl}${chatEndpoint}`
     return new Promise((resolve, reject) => {
-      wx.request({
+      const requestTask = wx.request({
         url: requestUrl,
         method: "POST",
         timeout: 120000,
@@ -369,7 +464,8 @@ Page({
         },
         data: {
           message,
-          session_id: this.sessionId || undefined
+          session_id: this.sessionId || undefined,
+          generation_id: generationId
         },
         success: (res) => {
           const result = res.data || {}
@@ -378,7 +474,7 @@ Page({
               this.sessionId = result.session_id
               wx.setStorageSync("chat_session_id", result.session_id)
             }
-            resolve(result.reply || result.content || "")
+            resolve(result)
             return
           }
           const errorCode = result?.error?.code ? `[${result.error.code}] ` : ""
@@ -391,6 +487,10 @@ Page({
           )
         },
         fail: (err) => {
+          if ((err.errMsg || "").includes("abort")) {
+            reject(new Error("__ABORTED__"))
+            return
+          }
           reject(
             new Error(
               `${err.errMsg || "后端接口调用失败"}\nURL: ${requestUrl}\n请检查：1) 合法域名 2) HTTPS 3) 后端在线`
@@ -398,6 +498,7 @@ Page({
           )
         }
       })
+      this.currentRequestTask = requestTask
     })
   }
 })

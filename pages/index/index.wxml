@@ -1,6 +1,6 @@
-<navigation-bar title="启小智" back="{{false}}" color="#1f2937" background="#f3f7ff"></navigation-bar>
+<navigation-bar title="启小智" back="{{false}}" color="#1f2937" background="transparent"></navigation-bar>
 
-<view class="page">
+<view class="page" bindtap="closeQuickActions">
   <scroll-view class="scrollarea" scroll-y type="list">
     <view class="page-container">
       <block wx:if="{{messages.length === 0}}">
@@ -13,13 +13,17 @@
               </view>
             </view>
             <view class="bot-avatar">
+              <view class="hi-badge">hi</view>
               <image class="bot-avatar-img" src="/assets/images/agent.jpg" mode="aspectFill" />
             </view>
           </view>
 
           <view class="hint-row">
             <text class="hint-label">你可以这样问我：</text>
-            <text class="switch-text">换一换</text>
+            <view class="switch-action" bindtap="switchSuggestions">
+              <text class="switch-icon">↻</text>
+              <text class="switch-text">换一换</text>
+            </view>
           </view>
 
           <view class="suggestion-list">
@@ -44,17 +48,21 @@
       <block wx:else>
         <view class="chat-list">
           <view class="msg {{item.role === 'user' ? 'user' : 'assistant'}}" wx:for="{{messages}}" wx:key="index">
-            <text wx:if="{{item.role === 'user'}}" class="msg-text">{{item.content}}</text>
+            <view wx:if="{{item.role === 'user'}}" class="msg-text user-msg-text">{{item.content}}</view>
             <rich-text wx:else class="msg-text" nodes="{{item.richText || item.content}}"></rich-text>
           </view>
-          <view class="loading" wx:if="{{loading}}">正在思考中...</view>
+          <view class="loading" wx:if="{{loading}}">
+            <text>正在思考中</text>
+            <text class="dot dot1">.</text>
+            <text class="dot dot2">.</text>
+            <text class="dot dot3">.</text>
+          </view>
         </view>
       </block>
     </view>
   </scroll-view>
 
-  <view class="input-area">
-    <view class="input-tip">内容由 AI 大模型生成，仅供参考</view>
+  <view class="input-area" catchtap="noop">
     <view class="input-card">
       <textarea
         class="input"
@@ -69,16 +77,28 @@
       <view class="input-footer">
         <text class="counter">{{inputText.length}}/500</text>
         <view class="input-actions">
-          <text class="plus-btn">＋</text>
+          <view class="plus-btn" catchtap="toggleQuickActions">＋</view>
           <view class="action-divider"></view>
           <view
-            class="send-icon {{loading || !canSend ? 'disabled' : 'active'}}"
-            bindtap="sendMessage"
+            class="send-icon {{loading ? 'loading' : (canSend ? 'active' : 'disabled')}}"
+            bindtap="handleSendButton"
           >
-            <text class="send-icon-text">➤</text>
+            <text class="send-icon-text">{{loading ? "■" : "➤"}}</text>
           </view>
         </view>
       </view>
     </view>
+    <view class="quick-menu" wx:if="{{showQuickActions}}" catchtap="noop">
+      <view class="quick-item" data-type="qa" bindtap="onQuickActionTap">
+        <text class="quick-text">解题答疑</text>
+      </view>
+      <view class="quick-item" data-type="code" bindtap="onQuickActionTap">
+        <text class="quick-text">编程</text>
+      </view>
+      <view class="quick-item" data-type="research" bindtap="onQuickActionTap">
+        <text class="quick-text">深入研究</text>
+      </view>
+    </view>
+    <view class="input-tip">内容由 AI 大模型生成，仅供参考</view>
   </view>
 </view>

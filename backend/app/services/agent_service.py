@@ -1,4 +1,5 @@
 import re
+import threading
 from typing import Dict, Iterator, List
 
 from openai import APIConnectionError, APIError, APITimeoutError, RateLimitError
@@ -24,6 +25,8 @@ class AppError(Exception):
 _THINK_BLOCK_RE = re.compile(r"<think>.*?</think>", flags=re.IGNORECASE | re.DOTALL)
 _THINK_OPEN_TO_END_RE = re.compile(r"<think>.*$", flags=re.IGNORECASE | re.DOTALL)
 _THINK_CLOSE_TAG_RE = re.compile(r"</think>", flags=re.IGNORECASE)
+_GENERATION_STOP_FLAGS = {}
+_GENERATION_LOCK = threading.Lock()
 
 
 def _strip_think_content(text: str) -> str:
@@ -32,6 +35,38 @@ def _strip_think_content(text: str) -> str:
     out = _THINK_OPEN_TO_END_RE.sub("", out)
     out = _THINK_CLOSE_TAG_RE.sub("", out)
     return out.strip()
+
+
+def _register_generation(generation_id: str):
+    if not generation_id:
+        return
+    with _GENERATION_LOCK:
+        _GENERATION_STOP_FLAGS[generation_id] = False
+
+
+def _is_generation_stopped(generation_id: str) -> bool:
+    if not generation_id:
+        return False
+    with _GENERATION_LOCK:
+        return bool(_GENERATION_STOP_FLAGS.get(generation_id))
+
+
+def _finish_generation(generation_id: str):
+    if not generation_id:
+        return
+    with _GENERATION_LOCK:
+        _GENERATION_STOP_FLAGS.pop(generation_id, None)
+
+
+def stop_generation(generation_id: str):
+    gid = (generation_id or "").strip()
+    if not gid:
+        raise AppError("INVALID_REQUEST", "generation_id 不能为空", 400)
+    with _GENERATION_LOCK:
+        if gid in _GENERATION_STOP_FLAGS:
+            _GENERATION_STOP_FLAGS[gid] = True
+            return {"ok": True, "generation_id": gid, "stopped": True}
+    return {"ok": True, "generation_id": gid, "stopped": False}
 
 
 def _build_llm_messages(session_id: str, message: str) -> List[Dict[str, str]]:
@@ -76,19 +111,28 @@ def chat_with_messages(messages, session_id=None):
     return {"ok": True, "content": content, "session_id": sid}
 
 
-def agent_chat(message, session_id=None):
+def agent_chat(message, session_id=None, generation_id=None):
     if not message:
         raise AppError("INVALID_REQUEST", "message 不能为空", 400)
     sid = ensure_session(session_id)
     llm_messages = _build_llm_messages(sid, message)
     client = build_client()
-    response = _request_completion(client, messages=llm_messages)
-    reply = _strip_think_content(response.choices[0].message.content or "")
-    if not reply:
-        raise AppError("MODEL_EMPTY_RESPONSE", "模型返回为空", 502)
-    save_message(sid, "user", message, touch_title=True)
-    save_message(sid, "assistant", reply)
-    return {"ok": True, "session_id": sid, "reply": reply}
+    gid = (generation_id or "").strip()
+    _register_generation(gid)
+    try:
+        if _is_generation_stopped(gid):
+            return {"ok": True, "session_id": sid, "reply": "", "stopped": True}
+        response = _request_completion(client, messages=llm_messages)
+        if _is_generation_stopped(gid):
+            return {"ok": True, "session_id": sid, "reply": "", "stopped": True}
+        reply = _strip_think_content(response.choices[0].message.content or "")
+        if not reply:
+            raise AppError("MODEL_EMPTY_RESPONSE", "模型返回为空", 502)
+        save_message(sid, "user", message, touch_title=True)
+        save_message(sid, "assistant", reply)
+        return {"ok": True, "session_id": sid, "reply": reply}
+    finally:
+        _finish_generation(gid)
 
 
 def session_list(limit=20):

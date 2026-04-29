@@ -10,6 +10,7 @@ from ..services.agent_service import (
     chat_with_messages,
     session_detail,
     session_list,
+    stop_generation,
 )
 from ..services.auth_service import login, logout, me, register
 
@@ -66,7 +67,23 @@ def register_routes(app):
         if not message:
             return fail("INVALID_REQUEST", "message 不能为空", 400)
         try:
-            return jsonify(agent_chat(message=message, session_id=payload.get("session_id")))
+            return jsonify(
+                agent_chat(
+                    message=message,
+                    session_id=payload.get("session_id"),
+                    generation_id=payload.get("generation_id"),
+                )
+            )
+        except AppError as e:
+            return fail(e.code, e.message, e.status_code)
+        except Exception as e:
+            return fail("INTERNAL_ERROR", str(e), 500)
+
+    @app.post("/api/agent/chat/stop")
+    def agent_chat_stop_api():
+        payload = request.get_json(silent=True) or {}
+        try:
+            return jsonify(stop_generation(payload.get("generation_id")))
         except AppError as e:
             return fail(e.code, e.message, e.status_code)
         except Exception as e:
