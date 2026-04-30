@@ -190,11 +190,10 @@ page {
 
 .msg-text {
   display: block;
-  width: 100%;
   max-width: 100%;
   white-space: normal;
   overflow-wrap: break-word;
-  word-break: break-all;
+  word-break: break-word;
 }
 
 .assistant {
@@ -207,6 +206,51 @@ page {
   border-radius: 0;
 }
 
+.assistant-segments {
+  width: 100%;
+}
+
+.code-card {
+  margin: 10rpx 0;
+  border-radius: 12rpx;
+  background: #f6f7f9;
+  overflow: hidden;
+}
+
+.code-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10rpx 14rpx 6rpx;
+}
+
+.code-lang {
+  font-size: 22rpx;
+  color: #8b94a6;
+  font-family: monospace;
+}
+
+.code-copy {
+  font-size: 22rpx;
+  color: #8b94a6;
+}
+
+.code-scroll {
+  width: 100%;
+}
+
+.code-body {
+  display: inline-block;
+  min-width: 100%;
+  box-sizing: border-box;
+  padding: 6rpx 14rpx 14rpx;
+  font-family: monospace;
+  font-size: 27rpx;
+  line-height: 1.6;
+  color: #1f2937;
+  white-space: pre;
+}
+
 .user {
   align-self: flex-end;
   background: #f1f3f6;
@@ -216,7 +260,13 @@ page {
 
 .user .msg-text {
   white-space: pre-wrap;
-  word-break: break-all;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.user-msg-text {
+  display: block;
+  width: 100%;
 }
 
 .loading {

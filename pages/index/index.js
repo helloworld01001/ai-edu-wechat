@@ -37,6 +37,18 @@ function renderMathImage(latex, block = false) {
   return `<img src="${src}" style="display:inline-block;vertical-align:middle;max-height:1.6em;" />`
 }
 
+function extractCodeBlocks(markdown) {
+  const source = String(markdown || "")
+  const result = []
+  const reg = /```[^\n]*\n([\s\S]*?)```/g
+  let m = reg.exec(source)
+  while (m) {
+    result.push((m[1] || "").trim())
+    m = reg.exec(source)
+  }
+  return result
+}
+
 function renderInlineMarkdown(text) {
   return String(text || "")
     .replace(/\\\((.+?)\\\)/g, (_, expr) => renderMathImage(expr, false))
@@ -86,6 +98,7 @@ function markdownToRichText(markdown) {
   const blocks = source.split("\n")
   const html = []
   let inCode = false
+  let codeLang = ""
   let inUl = false
   let inOl = false
   let i = 0
@@ -107,10 +120,19 @@ function markdownToRichText(markdown) {
       closeLists()
       if (!inCode) {
         inCode = true
-        html.push("<pre style=\"background:#f6f7f9;padding:12px 14px;border-radius:10px;overflow:auto;margin:10px 0;\"><code>")
+        codeLang = (line.trim().slice(3).trim().split(/\s+/)[0] || "text").toLowerCase()
+        html.push(
+          `<div style="margin:10px 0;border-radius:10px;background:#f6f7f9;overflow:hidden;">` +
+          `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px 4px;">` +
+          `<span style="font-size:12px;color:#8b94a6;font-family:monospace;">${escapeHtml(codeLang)}</span>` +
+          `<span style="font-size:12px;color:#8b94a6;">复制</span>` +
+          `</div>` +
+          `<pre style="margin:0;padding:8px 14px 12px;overflow:auto;background:transparent;"><code>`
+        )
       } else {
         inCode = false
-        html.push("</code></pre>")
+        codeLang = ""
+        html.push("</code></pre></div>")
       }
       i += 1
       continue
@@ -245,7 +267,7 @@ function markdownToRichText(markdown) {
 
   closeLists()
   if (inCode) {
-    html.push("</code></pre>")
+    html.push("</code></pre></div>")
   }
   return html.join("")
 }
@@ -264,8 +286,55 @@ function buildAssistantMessage(content) {
   return {
     role: "assistant",
     content: safeContent,
-    richText: markdownToRichText(safeContent)
+    richText: markdownToRichText(safeContent),
+    segments: splitAssistantSegments(safeContent)
   }
+}
+
+function buildUserMessage(content) {
+  const safeContent = String(content || "")
+  return {
+    role: "user",
+    content: safeContent,
+    richText: `<p style="margin:0;line-height:1.6;white-space:pre-wrap;word-break:break-word;">${escapeHtml(safeContent)}</p>`
+  }
+}
+
+function splitAssistantSegments(markdown) {
+  const source = String(markdown || "")
+  const reg = /```([^\n]*)\n([\s\S]*?)```/g
+  const segments = []
+  let last = 0
+  let m = reg.exec(source)
+  while (m) {
+    const textPart = source.slice(last, m.index)
+    if (textPart && textPart.trim()) {
+      segments.push({
+        type: "text",
+        html: markdownToRichText(textPart)
+      })
+    }
+    const lang = ((m[1] || "").trim().split(/\s+/)[0] || "text").toLowerCase()
+    const code = String(m[2] || "").replace(/\n$/, "")
+    segments.push({
+      type: "code",
+      lang,
+      code
+    })
+    last = reg.lastIndex
+    m = reg.exec(source)
+  }
+  const tail = source.slice(last)
+  if (tail && tail.trim()) {
+    segments.push({
+      type: "text",
+      html: markdownToRichText(tail)
+    })
+  }
+  if (!segments.length) {
+    segments.push({ type: "text", html: markdownToRichText(source) })
+  }
+  return segments
 }
 
 function normalizeSuggestionGroup(group) {
@@ -363,6 +432,20 @@ Page({
     this.sendPrompt(text)
   },
 
+  onCopyCodeTap(e) {
+    const msgIndex = Number(e?.currentTarget?.dataset?.msgIndex)
+    const segIndex = Number(e?.currentTarget?.dataset?.segIndex)
+    if (Number.isNaN(msgIndex) || Number.isNaN(segIndex)) return
+    const msg = this.data.messages[msgIndex]
+    const seg = msg?.segments?.[segIndex]
+    const code = seg?.type === "code" ? seg.code : ""
+    if (!code) return
+    wx.setClipboardData({
+      data: code,
+      success: () => wx.showToast({ title: "已复制", icon: "success" })
+    })
+  },
+
   switchSuggestions() {
     const nextSuggestions = pickRandomSuggestions(suggestionPool, 4)
     if (!nextSuggestions.length) return
@@ -413,7 +496,7 @@ Page({
     const generationId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     this.currentGenerationId = generationId
     this._stoppedByUser = false
-    const userMsg = { role: "user", content: prompt }
+    const userMsg = buildUserMessage(prompt)
     const updatedMessages = [...this.data.messages, userMsg]
 
     this.setData({

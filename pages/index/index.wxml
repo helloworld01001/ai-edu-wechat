@@ -47,9 +47,26 @@
 
       <block wx:else>
         <view class="chat-list">
-          <view class="msg {{item.role === 'user' ? 'user' : 'assistant'}}" wx:for="{{messages}}" wx:key="index">
-            <view wx:if="{{item.role === 'user'}}" class="msg-text user-msg-text">{{item.content}}</view>
-            <rich-text wx:else class="msg-text" nodes="{{item.richText || item.content}}"></rich-text>
+          <view class="msg {{item.role === 'user' ? 'user' : 'assistant'}}" wx:for="{{messages}}" wx:key="index" wx:for-index="msgIndex">
+            <view wx:if="{{item.role === 'assistant'}}" class="assistant-segments">
+              <block wx:for="{{item.segments}}" wx:key="index" wx:for-index="segIndex">
+                <rich-text wx:if="{{item.type === 'text'}}" class="msg-text" nodes="{{item.html}}"></rich-text>
+                <view wx:elif="{{item.type === 'code'}}" class="code-card">
+                  <view class="code-head">
+                    <text class="code-lang">{{item.lang}}</text>
+                    <text class="code-copy" data-msg-index="{{msgIndex}}" data-seg-index="{{segIndex}}" bindtap="onCopyCodeTap">复制</text>
+                  </view>
+                  <scroll-view scroll-x class="code-scroll">
+                    <text class="code-body">{{item.code}}</text>
+                  </scroll-view>
+                </view>
+              </block>
+            </view>
+            <rich-text
+              wx:else
+              class="msg-text user-msg-text"
+              nodes="{{item.richText || item.content}}"
+            ></rich-text>
           </view>
           <view class="loading" wx:if="{{loading}}">
             <text>正在思考中</text>
